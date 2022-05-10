@@ -12,13 +12,15 @@ use bevy::text::{Text2dBounds};
 use bevy::window::WindowMode;
 
 use leafwing_input_manager::InputManagerBundle;
-use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin, InputMap, UserInput};
+use leafwing_input_manager::prelude::{InputManagerPlugin, InputMap, UserInput};
 use leafwing_input_manager::user_input::InputButton;
 
-use ron_config::{Config, ConfigBuilder};
+use ron_config::{ConfigBuilder};
 
 use crate::field::{CellHandle, CellState, Field, Mark, RevealResult};
-use crate::generate::{ChaChaMineSelector, FieldGenerationOptions, FieldGenerator};
+
+
+use crate::generate::{FieldGenerationOptions, DefaultFieldGenerator};
 use crate::interactions::{FieldInteraction, MousePositionToCellConverter, update_cell_interaction};
 use crate::revealing::{Revealer, RevealerImpl};
 
@@ -111,16 +113,24 @@ impl TryFrom<WindowModeConfig> for WindowMode {
 
 fn main() {
     let mut app = App::new();
-    let config = ConfigBuilder::new()
-        .folder("./config", None)
-        .build();
-    println!("{:?}", config);
+    // #[cfg(not(target_arch = "wasm32"))]
+    //     let config = ConfigBuilder::new()
+    //     .folder("./config", None)
+    //     .build();
+    // #[cfg(target_arch = "wasm32")]
+    // let config = ConfigBuilder::new()
+    //     .http("http://localhost:3000/config/window.ron")
+    //     .build();
 
-    let title: String = config.try_get("window.title".into()).unwrap();
-    println!("{:?}", title);
-    app.insert_resource::<WindowDescriptor>(config.try_get::<WindowConfig>("window".into()).unwrap().try_into().unwrap());
+    // println!("{:?}", config);
 
-    app.insert_resource(config);
+    app.insert_resource::<WindowDescriptor>(WindowDescriptor{
+        height: 800.0,
+        width: 800.0,
+        title: "Minesweeper".to_owned(),
+        ..default()
+    });
+
 
     app.add_plugins(DefaultPlugins)
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
@@ -129,12 +139,15 @@ fn main() {
         .add_plugin(AssetCountDiagnosticsPlugin::<Image>::default())
         .add_plugin(InputManagerPlugin::<FieldInteraction>::default());
 
-    let field = FieldGenerator::<ChaChaMineSelector>::generate(Some(FieldGenerationOptions {
+    let field_option = Some(FieldGenerationOptions {
         width: 20,
         height: 20,
         mine_count: 20,
         ..default()
-    }));
+    });
+
+
+    let field = DefaultFieldGenerator::generate(field_option);
 
     app.insert_resource(InitState::default());
     app.insert_resource(field);
@@ -242,7 +255,7 @@ struct StateMaterials {
     mine: MineColor,
     marked_mine: MarkedMineColor,
     marked_empty: MarkedEmptyColor,
-    colors_numbers: HashMap<u8, Color>
+    colors_numbers: HashMap<u8, Color>,
 }
 
 #[derive(Deref, DerefMut)]
@@ -291,8 +304,8 @@ impl Default for InitState {
     }
 }
 
-fn check_init(init_state: Res<InitState>, mut state: ResMut<State<GameState>>){
-    if init_state.is_ready(){
+fn check_init(init_state: Res<InitState>, mut state: ResMut<State<GameState>>) {
+    if init_state.is_ready() {
         state.set(GameState::Playing).expect("Failed to set game state");
     }
 }
@@ -333,7 +346,7 @@ fn init_resources(mut commands: Commands, mut asset_server: ResMut<AssetServer>,
             (6 as u8, Color::rgb(1.0, 1.0, 0.0)),
             (7 as u8, Color::rgb(1.0, 1.0, 1.0)),
             (8 as u8, Color::rgb(0.5, 0.5, 0.5))
-        ])
+        ]),
     };
 
     commands.insert_resource(state_materials);
@@ -390,10 +403,6 @@ fn init_render_field(mut commands: Commands, field: Res<Field>, mut materials: R
         commands.spawn_bundle(bundle);
     };
 }
-
-
-
-
 
 
 fn check_victory(field: Res<Field>, mut commands: Commands, mut state: ResMut<State<GameState>>, font: Res<TextFont>, cam_options: Res<CameraOptions>) {

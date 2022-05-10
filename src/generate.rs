@@ -1,16 +1,31 @@
 use std::marker::PhantomData;
+#[cfg(feature = "fastrand")]
+use fastrand::u64;
 use crate::Field;
+#[cfg(feature = "rand")]
 use rand::{Rng, RngCore};
+#[cfg(feature = "rand")]
 use rand::seq::{IteratorRandom, SliceRandom};
+#[cfg(feature = "rand")]
 use rand::prelude::{SeedableRng};
-use rand_chacha::{ChaCha8Rng, ChaChaRng};
+#[cfg(feature = "rand_chacha")]
+use rand_chacha::{ChaCha8Rng};
 use crate::field::Cell;
 
 pub trait RandomMineSelector {
     fn get_mines_index(options: &FieldGenerationOptions) -> Vec<usize>;
 }
+pub struct FieldGenerator<M: RandomMineSelector>(PhantomData<M>);
 
-pub struct FieldGenerator<M: RandomMineSelector = ThreadRngFieldGenerator>(PhantomData<M>);
+#[cfg(all(not(feature = "rand_chacha"), not(feature = "rand"), feature = "fastrand"))]
+pub type DefaultFieldGenerator = FieldGenerator<FastRandGenerator>;
+
+
+#[cfg(all(not(feature="rand_chacha"), feature = "rand"))]
+pub type DefaultFieldGenerator = FieldGenerator<ThreadRngFieldGenerator>;
+
+#[cfg(feature = "rand_chacha")]
+pub type DefaultFieldGenerator = FieldGenerator<ChaChaMineSelector>;
 
 impl<M: RandomMineSelector> FieldGenerator<M> {
     pub fn generate(options: Option<FieldGenerationOptions>) -> Field {
@@ -28,9 +43,24 @@ impl<M: RandomMineSelector> FieldGenerator<M> {
     }
 }
 
+#[cfg(feature = "fastrand")]
+pub struct FastRandGenerator;
 
+#[cfg(feature = "fastrand")]
+impl RandomMineSelector for FastRandGenerator {
+    fn get_mines_index(options: &FieldGenerationOptions) -> Vec<usize> {
+        fastrand::seed(options.seed);
+        let mut vec = (0..options.width * options.height).collect::<Vec<_>>();
+        fastrand::shuffle(&mut vec);
+        vec = vec.iter().take(options.mine_count).map(|u| *u).collect();
+        vec
+    }
+}
+
+#[cfg(feature = "rand")]
 pub struct ThreadRngFieldGenerator {}
 
+#[cfg(feature = "rand")]
 impl RandomMineSelector for ThreadRngFieldGenerator {
     fn get_mines_index(options: &FieldGenerationOptions) -> Vec<usize> {
         let mut rng = rand::thread_rng();
@@ -50,6 +80,19 @@ pub struct FieldGenerationOptions {
 
 
 impl Default for FieldGenerationOptions {
+    #[cfg(feature = "fastrand")]
+    fn default() -> Self {
+
+        let seed = u64(..u64::MAX);
+        Self {
+            mine_count: 10,
+            seed,
+            width: 10,
+            height: 10,
+        }
+    }
+
+    #[cfg(all( not(feature = "fastrand"), any(feature = "rand")))]
     fn default() -> Self {
         let mut rng = rand::thread_rng();
         let seed = rng.next_u64();
