@@ -1,0 +1,22 @@
+[package]
+name = "minesweeper"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = "0.7.0"
+leafwing-input-manager = "0.3.0"
+leafwing_input_manager_macros = "0.3.0"
+bevy_asset_ron = "0.4.0"
+serde = "1.0.136"
+glob = "0.3.0"
+derive_more = "0.99.17"
+ron = "0.7.0"
+rand = "0.8.5"
+rand_chacha = { version = "0.3.1", optional = true }
+#ron-config = { git = "https://github.com/Azkarell/ron_config.git"}
+ron-config = { path = "../ron-config" }
+[features]
+default = ["rand_chacha"]
