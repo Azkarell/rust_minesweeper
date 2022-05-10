@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install xmllint
-      run: sudo dnf install -y alsa-lib-devel
+      run: sudo apt-get install -y alsa-lib-devel
     - name: Build
       run: cargo build --verbose
       
