@@ -16,7 +16,7 @@ derive_more = "0.99.17"
 ron = "0.7.0"
 rand = "0.8.5"
 rand_chacha = { version = "0.3.1", optional = true }
-#ron-config = { git = "https://github.com/Azkarell/ron_config.git"}
-ron-config = { path = "../ron-config" }
+ron-config = { git = "https://github.com/Azkarell/ron_config.git"}
+#ron-config = { path = "../ron-config" }
 [features]
 default = ["rand_chacha"]
