@@ -1,5 +1,6 @@
 use std::io;
 use std::collections::HashMap;
+use std::time::Duration;
 use bevy::prelude::*;
 use bevy::asset::diagnostic::AssetCountDiagnosticsPlugin;
 use bevy::diagnostic::{EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
@@ -9,6 +10,9 @@ use bevy::render::camera::{CameraProjection, RenderTarget, ScalingMode, WindowOr
 use bevy::sprite::{MaterialMesh2dBundle, SpecializedMaterial2d};
 use bevy::text::{Text2dBounds};
 use bevy::window::WindowMode;
+use bevy_egui::EguiPlugin;
+use iyes_loopless::state::NextState;
+use iyes_loopless::prelude::*;
 
 use leafwing_input_manager::InputManagerBundle;
 use leafwing_input_manager::prelude::{InputManagerPlugin, InputMap};
@@ -19,10 +23,11 @@ use crate::field::{CellHandle, CellState, Field, Mark, RevealResult};
 
 
 use crate::generate::{FieldGenerationOptions, DefaultFieldGenerator};
-use crate::interactions::{FieldInteraction, MousePositionToCellConverter, update_cell_interaction};
+use crate::interactions::{FieldInteraction, GameInteractions, MousePositionToCellConverter, update_cell_interaction};
 use crate::revealing::{Revealer, RevealerImpl};
 
 use serde::{Deserialize, Serialize};
+use crate::menu::{init_seed, init_visuals, Overlay, show_overlay, TitleText, UiState};
 use crate::render::update_render;
 
 mod field;
@@ -30,6 +35,7 @@ mod generate;
 mod revealing;
 mod interactions;
 mod render;
+mod menu;
 
 #[derive(PartialEq, Debug, Clone, Copy, Hash, Eq)]
 pub enum GameState {
@@ -122,7 +128,7 @@ fn main() {
 
     // println!("{:?}", config);
 
-    app.insert_resource::<WindowDescriptor>(WindowDescriptor{
+    app.insert_resource(WindowDescriptor{
         height: 800.0,
         width: 800.0,
         title: "Minesweeper".to_owned(),
@@ -135,7 +141,9 @@ fn main() {
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(EntityCountDiagnosticsPlugin::default())
         .add_plugin(AssetCountDiagnosticsPlugin::<Image>::default())
-        .add_plugin(InputManagerPlugin::<FieldInteraction>::default());
+        .add_plugin(InputManagerPlugin::<FieldInteraction>::default())
+        .add_plugin(InputManagerPlugin::<GameInteractions>::default())
+        .add_plugin(EguiPlugin);
 
     let field_option = Some(FieldGenerationOptions {
         width: 20,
@@ -145,27 +153,55 @@ fn main() {
     });
 
 
-    let field = DefaultFieldGenerator::generate(field_option);
-
     app.insert_resource(InitState::default());
-    app.insert_resource(field);
+    app.insert_resource(field_option);
     app.insert_resource(ClearColor(Color::rgb(0.9, 0.9, 0.9)));
     app.insert_resource(CameraOptions {
         scale: 1000.0,
         width: 1000.0,
         height: 1000.0,
     });
-    app.add_state(GameState::Init);
-    app.add_system_set(SystemSet::on_enter(GameState::Init).with_system(init_resources)
-        .with_system(init_camera)
-        .with_system(init_input));
 
-    app.add_system_set(SystemSet::on_update(GameState::Init).with_system(check_init));
-    app.add_system_set(SystemSet::on_update(GameState::Playing).with_system(update_render)
-        .with_system(update_cell_interaction)
-        .with_system(check_victory));
-    app.add_system_set(SystemSet::on_enter(GameState::Playing).with_system(init_render_field));
-    app.add_system_set(SystemSet::on_update(GameState::Menu).with_system(update_render));
+    app.insert_resource(UiState{
+        seed: fastrand::u64(0 .. u64::MAX).to_string(),
+       columns: 20,
+       rows: 20,
+       mines: 20,
+    });
+
+    let mut fixedupdate = SystemStage::parallel();
+
+
+
+    fixedupdate
+        .add_system(update_render.run_if_resource_exists::<Field>());
+
+
+
+    app.add_loopless_state(GameState::Init)
+        .add_enter_system(GameState::Init, init_visuals)
+        .add_enter_system(GameState::Init, init_resources)
+        .add_enter_system(GameState::Init, init_camera)
+        .add_enter_system(GameState::Init, init_input)
+        .add_enter_system(GameState::Menu, init_seed)
+        .add_enter_system(GameState::Playing, init_render_field);
+
+    app.add_exit_system(GameState::Menu, despawn_with::<Overlay>);
+
+    app.add_stage_before(CoreStage::Update, "FixedUpdate", FixedTimestepStage::from_stage(Duration::from_millis(125), fixedupdate));
+
+    app.add_system_set(ConditionSet::new().run_in_state(GameState::Init)
+        .with_system(check_init).into());
+
+    app.add_system_set(ConditionSet::new().run_in_state(GameState::Playing)
+                           .with_system(update_cell_interaction)
+                           .with_system(check_victory).into());
+
+    app.add_system_set(ConditionSet::new().run_in_state(GameState::Menu).with_system(show_overlay).into());
+
+    // app.add_system_set(ConditionSet::new().run_in_state(GameState::Menu)
+    //     .with_system(check_menu_actions).into());
+
     app.run();
 }
 
@@ -194,7 +230,6 @@ impl CameraOptions {
         let cell_option = CellOptions::from_field_dimension_and_camera_options((field.width, field.height), &self);
         let cell_x = x / cell_option.total_width();
         let cell_y = y / cell_option.total_height();
-        info!("{:?}", (cell_x, cell_y));
         let cell = CellHandle {
             x: cell_x as usize,
             y: cell_y as usize,
@@ -301,14 +336,20 @@ impl Default for InitState {
     }
 }
 
-fn check_init(init_state: Res<InitState>, mut state: ResMut<State<GameState>>) {
+fn despawn_with<T: Component>(mut commands: Commands, query: Query<Entity, With<T>>) {
+    query.iter().for_each(|entity| {
+        commands.entity(entity).despawn_recursive()
+    });
+}
+
+fn check_init(init_state: Res<InitState>, mut commands: Commands) {
     if init_state.is_ready() {
-        state.set(GameState::Playing).expect("Failed to set game state");
+        commands.insert_resource(TitleText("Mine Sweeper".to_string(), Color::BLUE));
+        commands.insert_resource(NextState(GameState::Menu));
     }
 }
 
 fn init_camera(mut commands: Commands, camera_options: Res<CameraOptions>, mut init_state: ResMut<InitState>) {
-    info!("cam_options: {:?}", camera_options);
     let mut cam = OrthographicCameraBundle::new_2d();
     cam.orthographic_projection.scaling_mode = ScalingMode::FixedVertical;
     cam.orthographic_projection.window_origin = WindowOrigin::BottomLeft;
@@ -361,12 +402,15 @@ fn init_input(mut commands: Commands, mut init_state: ResMut<InitState>) {
     init_state.input = true;
 }
 
-fn init_render_field(mut commands: Commands, field: Res<Field>, mut materials: ResMut<Assets<ColorMaterial>>, mut meshes: ResMut<Assets<Mesh>>,
+fn init_render_field(mut commands: Commands, field_options: Res<FieldGenerationOptions>, mut materials: ResMut<Assets<ColorMaterial>>, mut meshes: ResMut<Assets<Mesh>>,
                      camera_options: Res<CameraOptions>, state_materials: Res<StateMaterials>,
                      old: Query<Entity, With<CellComponent>>) {
     for old in old.iter() {
         commands.entity(old).despawn_recursive();
     }
+
+    let field = DefaultFieldGenerator::generate(Some(field_options.clone()));
+
 
     let converter = MousePositionToCellConverter::new();
     commands.insert_resource(converter);
@@ -397,32 +441,16 @@ fn init_render_field(mut commands: Commands, field: Res<Field>, mut materials: R
         };
         commands.spawn_bundle(bundle);
     };
+
+    commands.insert_resource(field);
 }
 
 
-fn check_victory(field: Res<Field>, mut commands: Commands, mut state: ResMut<State<GameState>>, font: Res<TextFont>, cam_options: Res<CameraOptions>) {
+fn check_victory(field: Res<Field>, mut commands: Commands) {
     if field.is_won() {
-        spawn_overlay("You won!", &mut commands, &font, &cam_options);
+        commands.insert_resource(TitleText("You won!".to_string(), Color::GREEN));
+        commands.insert_resource(NextState(GameState::Menu));
 
-        state.set(GameState::Menu).expect("Failed to set game state");
     }
 }
 
-fn spawn_overlay(txt: &str, commands: &mut Commands, font: &Res<TextFont>, cam_options: &CameraOptions) {
-    commands.spawn_bundle(Text2dBundle {
-        text: Text::with_section(txt,
-                                 TextStyle {
-                                     font: font.0.clone(),
-                                     color: Color::RED,
-                                     font_size: 150.0,
-                                 }, TextAlignment {
-                vertical: VerticalAlign::Center,
-                horizontal: HorizontalAlign::Center,
-            }),
-        text_2d_bounds: Text2dBounds {
-            size: Size::new(cam_options.width / 1.5, cam_options.height / 1.5)
-        },
-        transform: Transform::default().with_translation(Vec3::new(cam_options.width / 2.0, cam_options.height / 2.0, 5.0)),
-        ..default()
-    });
-}

@@ -1,8 +1,10 @@
 use bevy::prelude::*;
-use crate::{CameraOptions, CellHandle, Field, GameState, MainCam, RenderTarget, Revealer, RevealerImpl, RevealResult, spawn_overlay, TextFont};
+use iyes_loopless::prelude::NextState;
+use crate::{CameraOptions, CellHandle, Field, GameState, MainCam, RenderTarget, Revealer, RevealerImpl, RevealResult};
 
 use leafwing_input_manager::{Actionlike};
 use leafwing_input_manager::prelude::ActionState;
+use crate::menu::TitleText;
 
 #[derive(Actionlike, Clone, Debug)]
 pub enum FieldInteraction {
@@ -19,12 +21,11 @@ pub enum GameInteractions {
 
 pub(crate) fn update_cell_interaction(mut query: Query<&ActionState<FieldInteraction>>,
                            mut field: ResMut<Field>,
-                           mut state: ResMut<State<GameState>>,
                            cam_options: Res<CameraOptions>,
                            converter: Res<MousePositionToCellConverter>,
                            cam_query: Query<(&Camera, &GlobalTransform), With<MainCam>>,
                            windows: Res<Windows>,
-                           mut commands: Commands, font: Res<TextFont>) {
+                           mut commands: Commands) {
     let action = query.single_mut();
 
     let (cam, trans) = cam_query.single();
@@ -32,8 +33,8 @@ pub(crate) fn update_cell_interaction(mut query: Query<&ActionState<FieldInterac
         if action.just_pressed(FieldInteraction::Reveal) {
             match field.reveal(cell) {
                 RevealResult::Mine => {
-                    spawn_overlay("You lost!", &mut commands, &font, &cam_options);
-                    state.set(GameState::Menu).expect("Failed to set game state");
+                    commands.insert_resource(TitleText("You lost!".to_owned(), Color::RED));
+                    commands.insert_resource(NextState(GameState::Menu));
                 }
                 RevealResult::Empty(_) => {
                     RevealerImpl::reveal_area(&mut field, cell);
