@@ -1,5 +1,4 @@
 use std::io;
-use std::ops::{IndexMut};
 use std::collections::HashMap;
 use bevy::prelude::*;
 use bevy::asset::diagnostic::AssetCountDiagnosticsPlugin;
@@ -12,10 +11,9 @@ use bevy::text::{Text2dBounds};
 use bevy::window::WindowMode;
 
 use leafwing_input_manager::InputManagerBundle;
-use leafwing_input_manager::prelude::{InputManagerPlugin, InputMap, UserInput};
+use leafwing_input_manager::prelude::{InputManagerPlugin, InputMap};
 use leafwing_input_manager::user_input::InputButton;
 
-use ron_config::{ConfigBuilder};
 
 use crate::field::{CellHandle, CellState, Field, Mark, RevealResult};
 
@@ -249,7 +247,6 @@ impl CellOptions {
 }
 
 struct StateMaterials {
-    hover: HoverColor,
     revealed: RevealedColor,
     hidden: HiddenColor,
     mine: MineColor,
@@ -322,16 +319,14 @@ fn init_camera(mut commands: Commands, camera_options: Res<CameraOptions>, mut i
     init_state.camera = true;
 }
 
-fn init_resources(mut commands: Commands, mut asset_server: ResMut<AssetServer>, mut init_state: ResMut<InitState>) {
+fn init_resources(mut commands: Commands, asset_server: ResMut<AssetServer>, mut init_state: ResMut<InitState>) {
     let color_hidden = Color::rgb(0.4, 0.4, 0.4);
     let color_revealed = Color::rgb(0.8, 0.8, 0.8);
     let color_mine = Color::rgb(0.8, 0.0, 0.0);
-    let color_hover = Color::rgb(0.8, 0.8, 0.0);
     let color_marked_mine = Color::rgb(0.6, 0.1, 0.1);
     let color_marked_empty = Color::rgb(0.1, 0.6, 0.1);
 
     let state_materials = StateMaterials {
-        hover: HoverColor(color_hover),
         revealed: RevealedColor(color_revealed),
         hidden: HiddenColor(color_hidden),
         mine: MineColor(color_mine),

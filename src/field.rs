@@ -1,5 +1,4 @@
 use std::ops::{Index, IndexMut};
-use crate::info;
 
 #[derive(Debug, Clone, Copy)]
 pub struct CellHandle {
@@ -180,7 +179,7 @@ impl Field {
     }
 
     pub fn toggle_mark(&mut self, cell: CellHandle) {
-        let mut c = &mut self[cell];
+        let c = &mut self[cell];
 
         match c.state {
             CellState::Hidden => {

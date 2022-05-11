@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{CameraOptions, CellHandle, Field, FieldGenerationOptions, GameState, MainCam, RenderTarget, Revealer, RevealerImpl, RevealResult, spawn_overlay, TextFont};
+use crate::{CameraOptions, CellHandle, Field, GameState, MainCam, RenderTarget, Revealer, RevealerImpl, RevealResult, spawn_overlay, TextFont};
 
 use leafwing_input_manager::{Actionlike};
 use leafwing_input_manager::prelude::ActionState;
@@ -17,7 +17,7 @@ pub enum GameInteractions {
 }
 
 
-pub(crate) fn update_cell_interaction(mut query: Query<(&ActionState<FieldInteraction>)>,
+pub(crate) fn update_cell_interaction(mut query: Query<&ActionState<FieldInteraction>>,
                            mut field: ResMut<Field>,
                            mut state: ResMut<State<GameState>>,
                            cam_options: Res<CameraOptions>,

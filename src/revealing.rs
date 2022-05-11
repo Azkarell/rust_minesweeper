@@ -1,4 +1,4 @@
-use crate::{CellHandle, Field, info, RevealResult};
+use crate::{CellHandle, Field, RevealResult};
 
 pub trait Revealer {
     fn reveal_area(field: &mut Field, handle: CellHandle);
