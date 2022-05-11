@@ -31,7 +31,13 @@
     </style>
 </head>
 <script type="module">
+
     import init from './minesweeper.js'
+
+    window.oncontextmenu = (e) => {
+        e.preventDefault();
+    };
+
     init()
 </script>
 </html>
